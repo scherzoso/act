@@ -1,0 +1,388 @@
+#! /usr/bin/env sh
+# SPDX-License-Identifier: 0BSD
+# -----------------------------------------------------------------------------
+
+act_help="\
+usage: ${0##*/} [-CHMhlpv] [<host>]...
+
+Options:
+ -C <config-dir>     Search for file and module lists in <config-dir>. (config)
+ -H <hosts>          Use host list <hosts>. (hosts)
+ -M <modules-dir>    Search for modules in <modules-dir>. (modules)
+ -h                  Display this help text.
+ -l <log-file>       Write log to <log-file>. If <log-file> is '-', log to
+                     stderr(3). (none)
+ -p <method>         Use <method> for privilege escalation. Currently only
+                     'doas' and 'sudo' are accepted. (doas)
+ -v                  Enable verbose output.
+"
+
+tmpdir="$(mktemp -d -p "${TMPDIR:-"/tmp"}")"
+trap 'rm -rf "${tmpdir}"' EXIT
+
+# Make sure we always have the log file descriptor open somewhere.
+exec 9>/dev/null
+
+: "${ACT_CONFIG:="config"}"
+: "${ACT_HOSTS:="hosts"}"
+: "${ACT_MODULES:="modules"}"
+: "${ACT_PRIVESC:="doas"}"
+: "${ACT_VERBOSE:="n"}"
+
+ACT_SSH_ARGV="\
+-o LogLevel=ERROR \
+-o ControlMaster=auto \
+-o ControlPath=${tmpdir}/control-%r-%h-%p.socket \
+-o ControlPersist=30s\
+"
+
+##
+# _do_printf <fmt> [<fmt-arg>]...
+_do_printf()
+{
+	_do_printf_fmt="${1}"
+	shift
+
+	# shellcheck disable=SC2059
+	printf "%s: ${_do_printf_fmt}\\n" "${0##*/}" "${@}" >&2
+}
+
+##
+# _do_log <fmt> [<fmt-arg>]...
+_do_log()
+{
+	_do_log_fmt="${1}"
+	shift
+
+	# shellcheck disable=SC2059
+	printf "%s %s[%s]: ${_do_log_fmt}\\n" \
+		"$(date "+%FT%T%z")" "${0##*/}" "${$}" "${@}" >&9
+}
+
+##
+# checkyn <str-bool>
+checkyn()
+{
+	case "${1}" in
+	[Yy1]|[Yy][Ee][Ss])
+		return 0
+		;;
+	[Nn0]|[Nn][Oo])
+		return 1
+		;;
+	*)
+		return 2
+		;;
+	esac
+}
+
+##
+# shquote <str>
+shquote()
+{
+	for _shquote_arg in "${@}"; do
+		printf "%s\\n" "${_shquote_arg}" | sed "s/'/'\\\\''/g; 1s/^/'/; \$s/\$/'/"
+	done
+}
+
+##
+# strip_cwsf <file>
+strip_cwsf()
+{
+	sed -E '
+		# Strip empty lines, comment lines, and end-of-line comments.
+		/^[[:space:]]*(#.*)?$/d
+		s/[[:space:]]*#.*$//
+
+		# Fold escaped newlines.
+		: fold
+		/\\$/ {
+			N
+			s/\\\n[[:space:]]*//
+			t fold
+		}
+
+		# Strip start-of-line and end-of-line whitespace.
+		s/^[[:space:]]+//
+		s/[[:space:]]+$//
+		' <"${1}"
+}
+
+##
+# msg <fmt> [<fmt-arg>]...
+msg()
+{
+	_msg_fmt="${1}"
+	shift
+
+	_do_log "${_msg_fmt}" "${@}"
+	_do_printf "${_msg_fmt}" "${@}"
+}
+
+##
+# vmsg <fmt> [<fmt-arg>]...
+vmsg()
+{
+	_do_log "${@}"
+	if checkyn "${ACT_VERBOSE}"; then
+		_do_printf "${@}"
+	fi
+}
+
+##
+# fatal <fmt> [<fmt-arg>]...
+fatal()
+{
+	_fatal_fmt="${1}"
+	shift
+
+	_do_log "fatal: ${_fatal_fmt}" "${@}"
+	_do_printf "fatal: ${_fatal_fmt}" "${@}"
+	exit 1
+}
+
+##
+# rsync_cmd [<rsync-arg>]...
+rsync_cmd()
+{
+	if checkyn "${ACT_VERBOSE}"; then
+		vmsg "rsync -av -e \"ssh %s\" %s" "${ACT_SSH_ARGV}" "${*}"
+		rsync -av -e "ssh ${ACT_SSH_ARGV}" "${@}"
+	else
+		vmsg "rsync -a -e \"ssh %s\" %s" "${ACT_SSH_ARGV}" "${*}"
+		rsync -a -e "ssh ${ACT_SSH_ARGV}" "${@}"
+	fi
+}
+
+##
+# ssh_cmd <host> <command> [<command-arg>]...
+ssh_cmd()
+{
+	_ssh_cmd_host="${1}"
+	shift
+
+	vmsg "ssh %s -t %s -- %s" "${ACT_SSH_ARGV}" "${_ssh_cmd_host}" "${*}"
+
+	# shellcheck disable=SC2086
+	ssh ${ACT_SSH_ARGV} -t "${_ssh_cmd_host}" -- "${@}"
+}
+
+##
+# ctrl_open <host>
+ctrl_open()
+{
+	msg "%s: opening control socket" "${1}"
+	vmsg "ssh %s -t %s :" "${ACT_SSH_ARGV}" "${1}"
+
+	# shellcheck disable=SC2086
+	ssh ${ACT_SSH_ARGV} -t "${1}" ":"
+}
+
+##
+# ctrl_close <host>
+ctrl_close()
+{
+	msg "%s: closing control socket" "${1}"
+	vmsg "ssh %s -O exit -N %s" "${ACT_SSH_ARGV}" "${1}"
+
+	# shellcheck disable=SC2086
+	ssh ${ACT_SSH_ARGV} -O exit -N "${1}"
+}
+
+##
+# copy_list <host> <list> <dst>
+copy_list()
+{
+	msg "%s: copying files from list: %s" "${1}" "${2}"
+	rsync_cmd -r --files-from="${2}" "${PWD}" "${1}:${3}"
+	rsync_cmd "${2}" "${1}:${3}"
+}
+
+##
+# module_setup <host> <tmpdir> <module>
+module_setup()
+{
+	_module_setup_host="${1}"
+	_module_setup_tmpdir="${2}"
+	_module_setup_mod="${3}"
+	shift 3
+
+	if [ ! -x "${ACT_MODULES}/${_module_setup_mod}" ]; then
+		fatal "module does not exist: %s" "${_module_setup_mod}"
+	fi
+
+	vmsg "%s: setting up module: %s" \
+		"${_module_setup_host}" "${_module_setup_mod}"
+
+	# This needs to be on one line to avoid spurious tab characters in the
+	# log and output.
+	ssh_cmd "${_module_setup_host}" "ln -f -s '${_module_setup_tmpdir}/modules/${_module_setup_mod}' '${_module_setup_tmpdir}/module'" \
+		<"${ACT_MODULES}/${_module_setup_mod}"
+}
+
+##
+# module_run <host> <tmpdir> [priv:]<module> [<args>]
+module_run()
+{
+	_module_run_host="${1}"
+	_module_run_tmpdir="${2}"
+
+	if [ "${3#priv:}" != "${3}" ]; then
+		_module_run_priv="y"
+		_module_run_mod="${3#priv:}"
+		msg "%s: running privileged module: %s" "${1}" "${3}"
+	else
+		_module_run_priv="n"
+		_module_run_mod="${3}"
+		msg "%s: running module: %s" "${1}" "${3}"
+	fi
+
+	eval "set -- ${4}"
+
+	module_setup "${_module_run_host}" "${_module_run_tmpdir}" "${_module_run_mod}"
+	vmsg "%s: %s %s" "${_module_run_host}" "${_module_run_mod}" "${*}"
+
+	# These need to be on one line to avoid spurious tab characters in the
+	# log and output.
+	# shellcheck disable=SC2046
+	if checkyn "${_module_run_priv}"; then
+		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${ACT_PRIVESC} ./module" $(shquote "${@}")
+	else
+		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ./module" $(shquote "${@}")
+	fi
+}
+
+##
+# run_modules <host> <tmpdir> <list>
+run_modules()
+{
+	_run_modules_tmpf="$(mktemp -p "${tmpdir}")"
+	strip_cwsf "${3}" >"${_run_modules_tmpf}"
+
+	while IFS=" 	" read -r _run_modules_mod _run_modules_args; do
+		module_run "${1}" "${2}" "${_run_modules_mod}" "${_run_modules_args}" <&3
+	done 3<&0 <"${_run_modules_tmpf}"
+}
+
+##
+# host_run <host>
+host_run()
+{
+	_host_run_tmpdir="/tmp/act-${$}"
+
+	msg "%s: querying hostname" "${1}"
+	_host_run_hostname="$(ssh_cmd "${1}" hostname | tr -d "\r")"
+	msg "%s: hostname: %s" "${1}" "${_host_run_hostname}"
+
+	vmsg "%s: using file and module lists based on hostname" "${1}"
+	_host_run_files="${ACT_CONFIG}/files-${_host_run_hostname:-${1}}.list"
+	_host_run_modules="${ACT_CONFIG}/modules-${_host_run_hostname:-${1}}.list"
+
+	msg "%s: setting up temporary directory: %s" "${1}" "${_host_run_tmpdir}"
+	if ! ssh_cmd "${1}" mkdir -m 0700 -p "${_host_run_tmpdir}"; then
+		fatal "%s: failed to create directory: %s" \
+			"${1}" "${_host_run_tmpdir}"
+	fi
+
+	if [ -s "${_host_run_files}" ]; then
+		if ! copy_list "${1}" "${_host_run_files}" "${_host_run_tmpdir}"; then
+			fatal "%s: failed to copy file list: %s" \
+				"${1}" "${_host_run_files}"
+		fi
+	else
+		msg "%s: no file list; skipping" "${1}"
+	fi
+
+	if [ -s "${_host_run_modules}" ]; then
+		vmsg "%s: copying modules: %s" "${host}" "${ACT_MODULES}"
+		rsync_cmd "${ACT_MODULES}/" "${1}:${_host_run_tmpdir}/modules/"
+
+		if ! run_modules "${1}" "${_host_run_tmpdir}" "${_host_run_modules}"; then
+			fatal "%s: module failure" "${1}"
+		fi
+	else
+		msg "%s: no module list; skipping" "${1}"
+	fi
+
+	ssh_cmd "${1}" rm -rf "${_host_run_tmpdir}"
+}
+
+while getopts ":C:H:M:hl:p:v" opt; do
+	case "${opt}" in
+	C)
+		ACT_CONFIG="${OPTARG}"
+		;;
+	H)
+		ACT_HOSTS="${OPTARG}"
+		;;
+	M)
+		ACT_MODULES="${OPTARG}"
+		;;
+	h)
+		printf "%s" "${act_help}" >&2
+		exit 0
+		;;
+	l)
+		if [ "${OPTARG}" = "-" ]; then
+			exec 9>&2
+			msg "log to stderr(3)"
+		else
+			exec 9>"${OPTARG}"
+			msg "log to file: %s" "${OPTARG}"
+		fi
+		;;
+	p)
+		ACT_PRIVESC="${OPTARG}"
+		;;
+	v)
+		ACT_VERBOSE="y"
+		;;
+	:)
+		fatal "option requires argument: -%s" "${OPTARG}"
+		;;
+	*)
+		fatal "invalid option: -%s" "${OPTARG}"
+		;;
+	esac
+done
+shift "$((OPTIND - 1))"
+
+case "${ACT_PRIVESC}" in
+doas|sudo)
+	;;
+*)
+	fatal "unknown privilege escalation method: %s" "${ACT_PRIVESC}"
+	;;
+esac
+
+if [ "${#}" -eq 0 ]; then
+	if [ ! -f "${ACT_HOSTS}" ]; then
+		fatal "file does not exist: %s" "${ACT_HOSTS}"
+	fi
+
+	hosts_tmpf="$(mktemp -p "${tmpdir}")"
+	strip_cwsf "${ACT_HOSTS}" >"${hosts_tmpf}"
+
+	# shellcheck disable=SC2034
+	while IFS=" 	" read -r host x; do
+		set -- "${@}" "${host}"
+	done <"${hosts_tmpf}"
+fi
+
+if [ "${#}" -eq 0 ]; then
+	fatal "no hosts provided"
+fi
+
+for host in "${@}"; do
+	msg "%s: starting run" "${host}"
+
+	if ! ping -c 1 "${host}" >/dev/null 2>&1; then
+		fatal "%s: unable to connect" "${host}"
+	elif ! ctrl_open "${host}"; then
+		fatal "%s: unable to open SSH control socket" "${host}"
+	fi
+
+	host_run "${host}"
+	ctrl_close "${host}"
+	shift
+done
