@@ -1,0 +1,16 @@
+= act
+
+act is a tool for automated configuration of remote hosts. It is not
+particularly "smart" as it attempts to only depend on rsync(1), sh(1), and
+ssh(1). (And utilities specified by POSIX-2017.)
+
+Execution of act involves two main phases:
+
+1. Copying a set of files to a temporary directory on the remote, specified in
+   the file "files-<hostname>.list".
+2. Copying a set of executable scripts, referred to as "modules", to the remote
+   and executing them within the temporary directory. These modules and their
+   arguments are specified in the file "modules-<hostname>.list".
+
+Hosts may be specified on the command line. Otherwise, they are read from the
+"hosts" file, one per line.
