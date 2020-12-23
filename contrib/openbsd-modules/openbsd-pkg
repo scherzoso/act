@@ -1,0 +1,39 @@
+#! /usr/bin/env sh
+# SPDX-License-Identifier: 0BSD
+# -----------------------------------------------------------------------------
+
+##
+# module openbsd-pkg
+#
+# Usage: openbsd-pkg add [<pkg_add-arg>]...
+#    Or: openbsd-pkg del[ete] [<pkg_delete-arg>]...
+#
+# Install or delete binary packages on OpenBSD. Note that this is not a general
+# interface to OpenBSD's package scripts, though constructions like
+# "openbsd-pkg add -u" and "openbsd-pkg del -a" are valid.
+##
+
+fatal()
+{
+	_fatal_fmt="${1}"
+	shift
+
+	# shellcheck disable=SC2059
+	printf "openbsd-pkg: fatal: ${_fatal_fmt}\\n" "${@}" >&2
+	exit 1
+}
+
+op="${1}"
+shift
+
+case "${op}" in
+add)
+	pkg_add "${@}"
+	;;
+del|delete)
+	pkg_del "${@}"
+	;;
+*)
+	fatal "unknown operation: %s" "${op}"
+	;;
+esac

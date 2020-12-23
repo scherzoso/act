@@ -1,0 +1,78 @@
+@@ -7,6 +7,7 @@
+ 
+ Options:
+  -C <config-dir>     Search for file and module lists in <config-dir>. (config)
++ -c                  Disable bold/colourised output.
+  -H <hosts>          Use host list <hosts>. (hosts)
+  -M <modules-dir>    Search for modules in <modules-dir>. (modules)
+  -h                  Display this help text.
+@@ -28,6 +29,7 @@
+ : "${ACT_MODULES:="modules"}"
+ : "${ACT_PRIVESC:="doas"}"
+ : "${ACT_VERBOSE:="n"}"
++: "${ACT_COLOUR:="y"}"
+ 
+ ACT_SSH_ARGV="\
+ -o LogLevel=ERROR \
+@@ -36,6 +38,10 @@
+ -o ControlPersist=30s\
+ "
+ 
++ACT_BOLD=""
++ACT_RED=""
++ACT_SGR0=""
++
+ ##
+ # _do_printf <fmt> [<fmt-arg>]...
+ _do_printf()
+@@ -116,7 +122,7 @@ msg()
+ 	shift
+ 
+ 	_do_log "${_msg_fmt}" "${@}"
+-	_do_printf "${_msg_fmt}" "${@}"
++	_do_printf "${ACT_BOLD}${_msg_fmt}${ACT_SGR0}" "${@}"
+ }
+ 
+ ##
+@@ -137,7 +143,7 @@ fatal()
+ 	shift
+ 
+ 	_do_log "fatal: ${_fatal_fmt}" "${@}"
+-	_do_printf "fatal: ${_fatal_fmt}" "${@}"
++	_do_printf "${ACT_BOLD}${ACT_RED}fatal:${ACT_SGR0} ${_fatal_fmt}" "${@}"
+ 	exit 1
+ }
+ 
+@@ -310,4 +316,4 @@
+-while getopts ":C:H:M:hl:p:v" opt; do
++while getopts ":C:H:M:chl:p:v" opt; do
+ 	case "${opt}" in
+ 	C)
+ 		ACT_CONFIG="${OPTARG}"
+@@ -318,6 +324,9 @@
+ 	M)
+ 		ACT_MODULES="${OPTARG}"
+ 		;;
++	c)
++		ACT_COLOUR="n"
++		;;
+ 	h)
+ 		printf "%s" "${act_help}" >&2
+ 		exit 0
+@@ -355,6 +364,16 @@
+ 	;;
+ esac
+ 
++# Emphasise some of the notable output.
++if checkyn "${ACT_COLOUR}" \
++&& [ -t 2 ] \
++&& [ -n "${TERM}" ] \
++&& [ "${TERM}" != "dumb" ]; then
++	ACT_BOLD="$(tput bold)"
++	ACT_RED="$(tput setaf 1)"
++	ACT_SGR0="$(tput sgr0)"
++fi
++
+ if [ "${#}" -eq 0 ]; then
+ 	if [ ! -f "${ACT_HOSTS}" ]; then
+ 		fatal "file does not exist: %s" "${ACT_HOSTS}"

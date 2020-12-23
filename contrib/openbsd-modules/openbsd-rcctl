@@ -1,0 +1,18 @@
+#! /usr/bin/env sh
+# SPDX-License-Identifier: 0BSD
+# -----------------------------------------------------------------------------
+
+##
+# module openbsd-rcctl
+#
+# Usage: openbsd-rcctl [-df] <action> <daemon>
+#    Or: openbsd-rcctl set <daemon> [<variable> [<argument>]...]
+#    Or: openbsd-rcctl disable [<daemon>]...
+#    Or: openbsd-rcctl enable [<daemon>]...
+#    Or: openbsd-rcctl order [<daemon>]...
+#
+# Configure and control daemons and services on OpenBSD. See rcctl(8) for
+# details.
+##
+
+exec rcctl "${@}"

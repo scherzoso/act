@@ -1,0 +1,7 @@
+@@ -195,6 +195,6 @@ copy_list()
+ {
+ 	msg "%s: copying files from list: %s" "${1}" "${2}"
+-	rsync_cmd -r --files-from="${2}" "${PWD}" "${1}:${3}"
++	rsync_cmd -r --files-from="${2}" --no-relative "${PWD}" "${1}:${3}"
+ 	rsync_cmd "${2}" "${1}:${3}"
+ }
