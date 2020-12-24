@@ -5,7 +5,7 @@
 ##
 # module.sh
 #
-# Usage: . "./modules/module.sh" [<module-name>]
+# Usage: . "./modules/module.sh"
 #
 # This script is _not_ a module on its own and therefore should not be made
 # executable. The purpose of this script is to provide common functions for
