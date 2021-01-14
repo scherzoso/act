@@ -14,6 +14,8 @@ Options:
                      stderr(3). (none)
  -p <method>         Use <method> for privilege escalation. Currently only
                      'doas' and 'sudo' are accepted. (doas)
+ -u <username>       Use username as the login for the remote host. This name
+                     gets passed to ssh(1) via its -l option.
  -v                  Enable verbose output.
 "
 
@@ -27,6 +29,7 @@ exec 9>/dev/null
 : "${ACT_HOSTS:="hosts"}"
 : "${ACT_MODULES:="modules"}"
 : "${ACT_PRIVESC:="doas"}"
+: "${ACT_SSH_USER:="$(id -un)"}"
 : "${ACT_VERBOSE:="n"}"
 
 ACT_SSH_ARGV="\
@@ -145,11 +148,11 @@ fatal()
 rsync_cmd()
 {
 	if checkyn "${ACT_VERBOSE}"; then
-		vmsg "rsync -av -e \"ssh %s\" %s" "${ACT_SSH_ARGV}" "${*}"
-		rsync -av -e "ssh ${ACT_SSH_ARGV}" "${@}"
+		vmsg "rsync -av -e \"ssh %s\" %s" "${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${*}"
+		rsync -av -e "ssh ${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${@}"
 	else
-		vmsg "rsync -a -e \"ssh %s\" %s" "${ACT_SSH_ARGV}" "${*}"
-		rsync -a -e "ssh ${ACT_SSH_ARGV}" "${@}"
+		vmsg "rsync -a -e \"ssh %s\" %s" "${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${*}"
+		rsync -a -e "ssh ${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${@}"
 	fi
 }
 
@@ -160,10 +163,10 @@ ssh_cmd()
 	_ssh_cmd_host="${1}"
 	shift
 
-	vmsg "ssh %s -t %s -- %s" "${ACT_SSH_ARGV}" "${_ssh_cmd_host}" "${*}"
+	vmsg "ssh %s -l %s -t %s -- %s" "${ACT_SSH_ARGV}" "${ACT_SSH_USER}" "${_ssh_cmd_host}" "${*}"
 
 	# shellcheck disable=SC2086
-	ssh ${ACT_SSH_ARGV} -t "${_ssh_cmd_host}" -- "${@}"
+	ssh ${ACT_SSH_ARGV} -l "${ACT_SSH_USER}" -t "${_ssh_cmd_host}" -- "${@}"
 }
 
 ##
@@ -171,10 +174,10 @@ ssh_cmd()
 ctrl_open()
 {
 	msg "%s: opening control socket" "${1}"
-	vmsg "ssh %s -t %s :" "${ACT_SSH_ARGV}" "${1}"
+	vmsg "ssh %s -l %s -t %s :" "${ACT_SSH_ARGV}" "${ACT_SSH_USER}" "${1}"
 
 	# shellcheck disable=SC2086
-	ssh ${ACT_SSH_ARGV} -t "${1}" ":"
+	ssh ${ACT_SSH_ARGV} -l "${ACT_SSH_USER}" -t "${1}" ":"
 }
 
 ##
@@ -182,10 +185,10 @@ ctrl_open()
 ctrl_close()
 {
 	msg "%s: closing control socket" "${1}"
-	vmsg "ssh %s -O exit -N %s" "${ACT_SSH_ARGV}" "${1}"
+	vmsg "ssh %s -l %s -O exit -N %s" "${ACT_SSH_ARGV}" "${ACT_SSH_USER}" "${1}"
 
 	# shellcheck disable=SC2086
-	ssh ${ACT_SSH_ARGV} -O exit -N "${1}"
+	ssh ${ACT_SSH_ARGV} -l "${ACT_SSH_USER}" -O exit -N "${1}"
 }
 
 ##
@@ -290,7 +293,7 @@ host_run()
 	ssh_cmd "${1}" rm -rf "${_host_run_tmpdir}"
 }
 
-while getopts ":C:H:M:hl:p:v" opt; do
+while getopts ":C:H:M:hl:p:u:v" opt; do
 	case "${opt}" in
 	C)
 		ACT_CONFIG="${OPTARG}"
@@ -316,6 +319,9 @@ while getopts ":C:H:M:hl:p:v" opt; do
 		;;
 	p)
 		ACT_PRIVESC="${OPTARG}"
+		;;
+	u)
+		ACT_SSH_USER="${OPTARG}"
 		;;
 	v)
 		ACT_VERBOSE="y"
@@ -357,6 +363,13 @@ if [ "${#}" -eq 0 ]; then
 fi
 
 for host in "${@}"; do
+	save_user="${ACT_SSH_USER}"
+
+	if [ "${host##*@}" != "${host}" ]; then
+		ACT_SSH_USER="${host%@*}"
+		host="${host##*@}"
+	fi
+
 	msg "%s: starting run" "${host}"
 
 	if ! ping -c 1 "${host}" >/dev/null 2>&1; then
@@ -367,5 +380,6 @@ for host in "${@}"; do
 
 	host_run "${host}"
 	ctrl_close "${host}"
+	ACT_SSH_USER="${save_user}"
 	shift
 done

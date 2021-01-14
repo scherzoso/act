@@ -6,7 +6,7 @@ act - automated configuration tool
 
 == Synopsis
 
-*act* [*-CHMhlpv*] [_host_]...
+*act* [*-CHMhlpuv*] \[[__user__**@**]_host_]...
 
 == Description
 
@@ -82,6 +82,10 @@ written to */dev/null*.
 Use _method_ for privilege escalation on the remote host. Currently, the only
 accepted values are *doas* and *sudo*.
 
+*-u* _username_::
+Use _username_ as the login for the remote host. This name gets passed to
+**ssh**(1) via its *-l* option.
+
 *-v*::
 Enable verbose output. This also causes the *-v* flag to be passed to *rsync*
 and *ACT_VERBOSE* to be set to '`y`' in the environment of each module.
@@ -101,6 +105,10 @@ Directory containing modules. Equivalent to using the *-M* option.
 *ACT_PRIVESC*::
 Privilege escalation method. Acceptable values are *doas* and *sudo*.
 Equivalent to using the *-p* option.
+
+*ACT_SSH_USER*::
+Set the user login to use when connecting to the remote host. Equivalent to
+using the *-u* option.
 
 *ACT_VERBOSE*::
 Boolean for enabling verbose output. Equivalent to using the *-v* option.
