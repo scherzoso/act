@@ -6,14 +6,14 @@
   -H <hosts>          Use host list <hosts>. (hosts)
   -M <modules-dir>    Search for modules in <modules-dir>. (modules)
   -h                  Display this help text.
-@@ -28,6 +29,7 @@
- : "${ACT_MODULES:="modules"}"
+@@ -29,6 +30,7 @@
  : "${ACT_PRIVESC:="doas"}"
+ : "${ACT_SSH_USER:="$(id -un)"}"
  : "${ACT_VERBOSE:="n"}"
 +: "${ACT_COLOUR:="y"}"
  
  ACT_SSH_ARGV="\
- -o LogLevel=ERROR \
+ -o ControlMaster=auto \
 @@ -36,6 +38,10 @@
  -o ControlPersist=30s\
  "
@@ -43,13 +43,16 @@
  	exit 1
  }
  
-@@ -310,4 +316,4 @@
--while getopts ":C:H:M:hl:p:v" opt; do
-+while getopts ":C:H:M:chl:p:v" opt; do
+@@ -291,7 +297,7 @@ host_run()
+ 	ssh_cmd "${1}" rm -rf "${_host_run_tmpdir}"
+ }
+ 
+-while getopts ":C:H:M:hl:p:u:v" opt; do
++while getopts ":C:H:M:chl:p:u:v" opt; do
  	case "${opt}" in
  	C)
  		ACT_CONFIG="${OPTARG}"
-@@ -318,6 +324,9 @@
+@@ -302,6 +308,9 @@
  	M)
  		ACT_MODULES="${OPTARG}"
  		;;
@@ -59,7 +62,7 @@
  	h)
  		printf "%s" "${act_help}" >&2
  		exit 0
-@@ -355,6 +364,16 @@
+@@ -342,6 +351,16 @@
  	;;
  esac
  
