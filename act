@@ -198,28 +198,6 @@ copy_list()
 }
 
 ##
-# module_setup <host> <tmpdir> <module>
-module_setup()
-{
-	_module_setup_host="${1}"
-	_module_setup_tmpdir="${2}"
-	_module_setup_mod="${3}"
-	shift 3
-
-	if [ ! -x "${ACT_MODULES}/${_module_setup_mod}" ]; then
-		fatal "module does not exist: %s" "${_module_setup_mod}"
-	fi
-
-	vmsg "%s: setting up module: %s" \
-		"${_module_setup_host}" "${_module_setup_mod}"
-
-	# This needs to be on one line to avoid spurious tab characters in the
-	# log and output.
-	ssh_cmd "${_module_setup_host}" "ln -f -s '${_module_setup_tmpdir}/modules/${_module_setup_mod}' '${_module_setup_tmpdir}/module'" \
-		<"${ACT_MODULES}/${_module_setup_mod}"
-}
-
-##
 # module_run <host> <tmpdir> [priv:]<module> [<args>]
 module_run()
 {
@@ -236,18 +214,24 @@ module_run()
 		msg "%s: running module: %s" "${1}" "${3}"
 	fi
 
+	# The modules/ directory is mirrored on the remote, so just do a local
+	# check on whether the module we've been given is executable.
+	if [ ! -x "${ACT_MODULES}/${_module_run_mod}" ]; then
+		fatal "module does not exist: %s" "${_module_run_mod}"
+	else
+		vmsg "%s: %s %s" "${_module_run_host}" "${_module_run_mod}" "${*}"
+	fi
+
 	eval "set -- ${4}"
 
-	module_setup "${_module_run_host}" "${_module_run_tmpdir}" "${_module_run_mod}"
-	vmsg "%s: %s %s" "${_module_run_host}" "${_module_run_mod}" "${*}"
 
 	# These need to be on one line to avoid spurious tab characters in the
 	# log and output.
 	# shellcheck disable=SC2046
 	if checkyn "${_module_run_priv}"; then
-		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${ACT_PRIVESC} ./module" $(shquote "${@}")
+		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${ACT_PRIVESC} './modules/${_module_run_mod}'" $(shquote "${@}")
 	else
-		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ./module" $(shquote "${@}")
+		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' './modules/${_module_run_mod}'" $(shquote "${@}")
 	fi
 }
 
