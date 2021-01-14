@@ -30,7 +30,6 @@ exec 9>/dev/null
 : "${ACT_VERBOSE:="n"}"
 
 ACT_SSH_ARGV="\
--o LogLevel=ERROR \
 -o ControlMaster=auto \
 -o ControlPath=${tmpdir}/control-%r-%h-%p.socket \
 -o ControlPersist=30s\
