@@ -147,13 +147,13 @@ fatal()
 # rsync_cmd [<rsync-arg>]...
 rsync_cmd()
 {
+	_rsync_cmd_v=""
 	if checkyn "${ACT_VERBOSE}"; then
-		vmsg "rsync -av -e \"ssh %s\" %s" "${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${*}"
-		rsync -av -e "ssh ${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${@}"
-	else
-		vmsg "rsync -a -e \"ssh %s\" %s" "${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${*}"
-		rsync -a -e "ssh ${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${@}"
+		_rsync_cmd_v="v"
 	fi
+
+	vmsg "rsync -a%s -e \"ssh %s\" %s" "${_rsync_cmd_v}" "${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${*}"
+	rsync "-a${_rsync_cmd_v}" -e "ssh ${ACT_SSH_ARGV} -l ${ACT_SSH_USER}" "${@}"
 }
 
 ##
