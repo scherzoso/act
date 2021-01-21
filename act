@@ -227,15 +227,15 @@ module_run()
 
 	eval "set -- ${4}"
 
+	_module_run_privesc=""
+	if checkyn "${_module_run_priv}"; then
+		_module_run_privesc="${ACT_PRIVESC}"
+	fi
 
 	# These need to be on one line to avoid spurious tab characters in the
 	# log and output.
 	# shellcheck disable=SC2046
-	if checkyn "${_module_run_priv}"; then
-		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${ACT_PRIVESC} './modules/${_module_run_mod}'" $(shquote "${@}")
-	else
-		ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' './modules/${_module_run_mod}'" $(shquote "${@}")
-	fi
+	ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${_module_run_privesc} './modules/${_module_run_mod}'" $(shquote "${@}")
 }
 
 ##
