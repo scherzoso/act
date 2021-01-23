@@ -199,6 +199,32 @@ ctrl_close()
 }
 
 ##
+# log_init <host> <local-socket> <remote-socket>
+log_init()
+{
+	msg "%s: setting up log socket" "${1}"
+	ctrl_cmd "${1}" "forward" -R "${3}:${2}"
+}
+
+##
+# log_open <local-socket>
+log_open()
+{
+	if ! pgrep -f -u "$(id -u)" "nc -l -N -U ${1}"; then
+		vmsg "using nc(1) to listen on lock socket: %s" "${1}"
+		nc -l -N -U "${1}" >&9 &
+	fi
+}
+
+##
+# log_close <local-socket>
+log_close()
+{
+	vmsg "making sure nc(1) is dead: %s" "${1}"
+	pkill -f -u "$(id -u)" "nc -l -N -U ${1}"
+}
+
+##
 # copy_list <host> <list> <dst>
 copy_list()
 {
