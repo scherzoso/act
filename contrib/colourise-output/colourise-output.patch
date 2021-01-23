@@ -6,7 +6,7 @@
   -H <hosts>          Use host list <hosts>. (hosts)
   -M <modules-dir>    Search for modules in <modules-dir>. (modules)
   -h                  Display this help text.
-@@ -29,6 +30,7 @@
+@@ -31,6 +32,7 @@
  : "${ACT_PRIVESC:="doas"}"
  : "${ACT_SSH_USER:="$(id -un)"}"
  : "${ACT_VERBOSE:="n"}"
@@ -14,7 +14,7 @@
  
  ACT_SSH_ARGV="\
  -o ControlMaster=auto \
-@@ -36,6 +38,10 @@
+@@ -38,6 +40,10 @@
  -o ControlPersist=30s\
  "
  
@@ -25,7 +25,7 @@
  ##
  # _do_printf <fmt> [<fmt-arg>]...
  _do_printf()
-@@ -116,7 +122,7 @@ msg()
+@@ -118,7 +124,7 @@ msg()
  	shift
  
  	_do_log "${_msg_fmt}" "${@}"
@@ -34,7 +34,7 @@
  }
  
  ##
-@@ -137,7 +143,7 @@ fatal()
+@@ -139,7 +145,7 @@ fatal()
  	shift
  
  	_do_log "fatal: ${_fatal_fmt}" "${@}"
@@ -43,7 +43,7 @@
  	exit 1
  }
  
-@@ -291,7 +297,7 @@ host_run()
+@@ -299,7 +305,7 @@
  	ssh_cmd "${1}" rm -rf "${_host_run_tmpdir}"
  }
  
@@ -52,7 +52,7 @@
  	case "${opt}" in
  	C)
  		ACT_CONFIG="${OPTARG}"
-@@ -302,6 +308,9 @@
+@@ -310,6 +316,9 @@
  	M)
  		ACT_MODULES="${OPTARG}"
  		;;
@@ -62,7 +62,7 @@
  	h)
  		printf "%s" "${act_help}" >&2
  		exit 0
-@@ -342,6 +351,16 @@
+@@ -350,6 +359,16 @@
  	;;
  esac
  
