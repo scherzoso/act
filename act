@@ -170,14 +170,24 @@ ssh_cmd()
 }
 
 ##
+# ctrl_cmd <host> <ctrl-cmd> [<ssh-option>]...
+ctrl_cmd()
+{
+	_ctrl_cmd_host="${1}"
+	shift
+
+	vmsg "ssh %s -l %s -O %s -N %s" "${ACT_SSH_ARGV}" "${ACT_SSH_USER}" "${1}" "${_ctrl_cmd_host}"
+
+	# shellcheck disable=SC2086
+	ssh ${ACT_SSH_ARGV} -l "${ACT_SSH_USER}" -O "${@}" -N "${_ctrl_cmd_host}"
+}
+
+##
 # ctrl_open <host>
 ctrl_open()
 {
 	msg "%s: opening control socket" "${1}"
-	vmsg "ssh %s -l %s -t %s :" "${ACT_SSH_ARGV}" "${ACT_SSH_USER}" "${1}"
-
-	# shellcheck disable=SC2086
-	ssh ${ACT_SSH_ARGV} -l "${ACT_SSH_USER}" -t "${1}" ":"
+	ssh_cmd "${1}" ":"
 }
 
 ##
@@ -185,10 +195,7 @@ ctrl_open()
 ctrl_close()
 {
 	msg "%s: closing control socket" "${1}"
-	vmsg "ssh %s -l %s -O exit -N %s" "${ACT_SSH_ARGV}" "${ACT_SSH_USER}" "${1}"
-
-	# shellcheck disable=SC2086
-	ssh ${ACT_SSH_ARGV} -l "${ACT_SSH_USER}" -O exit -N "${1}"
+	ctrl_cmd "${1}" "exit"
 }
 
 ##
