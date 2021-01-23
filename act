@@ -272,9 +272,21 @@ run_modules()
 	_run_modules_tmpf="$(mktemp -p "${tmpdir}")"
 	strip_cwsf "${3}" >"${_run_modules_tmpf}"
 
+	if ! log_init "${1}" "${tmpdir}/log.socket" "${_host_run_tmpdir}/log.socket"; then
+		fatal "%s: failed to set up log socket: %s" "${tmpdir}/log.socket"
+	fi
+
 	while IFS=" 	" read -r _run_modules_mod _run_modules_args; do
+		if ! log_open "${tmpdir}/log.socket"; then
+			error "failed to open local log socket: %s" "${tmpdir}/log.socket"
+			return 1
+		fi
+
 		module_run "${1}" "${2}" "${_run_modules_mod}" "${_run_modules_args}" <&3
 	done 3<&0 <"${_run_modules_tmpf}"
+
+	# If there's a nc(1) hanging around, kill it.
+	log_close "${tmpdir}/log.socket"
 }
 
 ##
