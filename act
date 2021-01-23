@@ -221,11 +221,10 @@ module_run()
 	# check on whether the module we've been given is executable.
 	if [ ! -x "${ACT_MODULES}/${_module_run_mod}" ]; then
 		fatal "module does not exist: %s" "${_module_run_mod}"
-	else
-		vmsg "%s: %s %s" "${_module_run_host}" "${_module_run_mod}" "${*}"
 	fi
 
 	eval "set -- ${4}"
+	vmsg "%s: %s %s" "${_module_run_host}" "${_module_run_mod}" "${*}"
 
 	_module_run_privesc=""
 	if checkyn "${_module_run_priv}"; then
