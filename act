@@ -215,12 +215,12 @@ module_run()
 	_module_run_tmpdir="${2}"
 
 	if [ "${3#priv:}" != "${3}" ]; then
-		_module_run_priv="y"
 		_module_run_mod="${3#priv:}"
-		msg "%s: running privileged module: %s" "${1}" "${3}"
+		_module_run_priv="${ACT_PRIVESC}"
+		msg "%s: running privileged module: %s" "${1}" "${3#priv:}"
 	else
-		_module_run_priv="n"
 		_module_run_mod="${3}"
+		_module_run_priv=""
 		msg "%s: running module: %s" "${1}" "${3}"
 	fi
 
@@ -233,15 +233,10 @@ module_run()
 	eval "set -- ${4}"
 	vmsg "%s: %s %s" "${_module_run_host}" "${_module_run_mod}" "${*}"
 
-	_module_run_privesc=""
-	if checkyn "${_module_run_priv}"; then
-		_module_run_privesc="${ACT_PRIVESC}"
-	fi
-
 	# These need to be on one line to avoid spurious tab characters in the
 	# log and output.
 	# shellcheck disable=SC2046
-	ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${_module_run_privesc} './modules/${_module_run_mod}'" $(shquote "${@}")
+	ssh_cmd "${_module_run_host}" "cd '${_module_run_tmpdir}' && ACT_VERBOSE='${ACT_VERBOSE}' ${_module_run_priv} './modules/${_module_run_mod}'" $(shquote "${@}")
 }
 
 ##
